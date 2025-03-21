@@ -94,7 +94,7 @@ param(
 
     [Parameter(Mandatory = $false)]
     [ValidateSet('All', 'Unmanaged', 'Automatic', 'UserConfirmed', 'SupportApproved')]
-    [String]$elevationMode,
+    [String]$elevationMode = 'All',
 
     [Parameter(Mandatory = $false)]
     [ValidateSet('Hash')]
@@ -222,11 +222,11 @@ Function Get-DeviceEPMReport() {
     try {
 
         switch ($type) {
-            All { $uri = "https://graph.microsoft.com/$graphApiVersion/$($Resource)" }
-            Unmanaged { $uri = "https://graph.microsoft.com/$graphApiVersion/$($Resource)?filter=(elevationType eq 'unmanagedElevation')" }
-            Automatic { $uri = "https://graph.microsoft.com/$graphApiVersion/$($Resource)?filter=(elevationType eq 'zeroTouchElevation')" }
-            UserConfirmed { $uri = "https://graph.microsoft.com/$graphApiVersion/$($Resource)?filter=(elevationType eq 'userConfirmedElevation')" }
-            SupportApproved { $uri = "https://graph.microsoft.com/$graphApiVersion/$($Resource)?filter=(elevationType eq 'supportApprovedElevation')" }
+            'All' { $uri = "https://graph.microsoft.com/$graphApiVersion/$($Resource)" }
+            'Unmanaged' { $uri = "https://graph.microsoft.com/$graphApiVersion/$($Resource)?filter=(elevationType eq 'unmanagedElevation')" }
+            'Automatic' { $uri = "https://graph.microsoft.com/$graphApiVersion/$($Resource)?filter=(elevationType eq 'zeroTouchElevation')" }
+            'UserConfirmed' { $uri = "https://graph.microsoft.com/$graphApiVersion/$($Resource)?filter=(elevationType eq 'userConfirmedElevation')" }
+            'SupportApproved' { $uri = "https://graph.microsoft.com/$graphApiVersion/$($Resource)?filter=(elevationType eq 'supportApprovedElevation')" }
             Default { $uri = "https://graph.microsoft.com/$graphApiVersion/$($Resource)" }
         }
 
@@ -515,7 +515,7 @@ Write-Host 'All required scope permissions are present.' -ForegroundColor Green
 if ($report) {
 
     $date = (Get-Date -Format 'yyyyMMdd-HHmmss').ToString()
-    $csvFile = ".\EPM-Report-$date.csv"
+    $csvFile = ".\EPManager-Report-$date.csv"
 
     switch ($elevationGrouping) {
         'Hash' { $grouping = 'hash' }
@@ -523,17 +523,25 @@ if ($report) {
         'Device' { $grouping = 'deviceName' }
         Default { $grouping = 'hash' }
     }
+
     $epmReport = @()
-    if (!$elevationMode) {
-        $elevations = Get-DeviceEPMReport | Group-Object -Property $grouping
-    }
-    else {
-        $elevations = Get-DeviceEPMReport -type $elevationMode | Group-Object -Property $grouping
-    }
+    $elevations = Get-DeviceEPMReport -type $elevationMode
 
-    foreach ($elevation in $elevations) {
+    if ($elevations.count -eq 0) {
+        Write-Host ''
+        Write-Host "No elevations with mode $elevationMode found in Intune." -ForegroundColor Red
+        Write-Host ''
+        Break
+    }
+    Write-Host ''
+    Write-Host "Found $($elevations.count) $elevationMode elevations in Intune." -ForegroundColor Cyan
+    Write-Host ''
 
-        $elevationGroups = $elevation.Group
+    $groupedElevations = $elevations | Group-Object -Property $grouping
+
+    foreach ($groupedElevation in $groupedElevations) {
+
+        $elevationGroups = $groupedElevation.Group
         $users = @()
         $devices = @()
 
@@ -551,7 +559,7 @@ if ($report) {
         }
 
         $Data = [PSCustomObject]@{
-            ElevationCount        = $elevation.Count
+            ElevationCount        = $groupedElevation.Count
             Product               = $fileProduct
             Description           = $fileDescription
             Publisher             = $fileCompany

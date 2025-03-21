@@ -37,7 +37,7 @@ Run  the script to capture EPM report data to a CSV file in the same location as
 After modifying the exported CSV file, it can then be imported with the below command to add new policies to Intune:
 
 ```powershell
-.\EPManager.ps1 -tenantID '437e8ffb-3030-469a-99da-e5b527908099' -import -importPath ".\EPM-Report-20250321-111725.csv"
+.\EPManager.ps1 -tenantID '437e8ffb-3030-469a-99da-e5b527908099' -import -importPath ".\EPManager-Report-20250321-111725.csv"
 ```
 
 OR
@@ -45,7 +45,7 @@ OR
 After modifying the exported CSV file, it can then be imported with the below command to add new policies to Intune and assign them to specified groups:
 
 ```powershell
-.\EPManager.ps1  -tenantID '437e8ffb-3030-469a-99da-e5b527908099' -import -importPath ".\EPM-Report-20250321-111725.csv" -assign
+.\EPManager.ps1  -tenantID '437e8ffb-3030-469a-99da-e5b527908099' -import -importPath ".\EPManager-Report-20250321-111725.csv" -assign
 ```
 
 ## 🚑 Support
