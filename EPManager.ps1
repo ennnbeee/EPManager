@@ -1,13 +1,13 @@
 <#PSScriptInfo
 
-.VERSION 0.2
+.VERSION 0.3
 .GUID dda70c3d-e3c9-44cb-9acf-6e452e36d9d5
 .AUTHOR Nick Benton
 .COMPANYNAME odds+endpoints
 .COPYRIGHT GPL
 .TAGS Graph Intune Windows
-.LICENSEURI https://github.com/ennnbeee/EndpointPrivilegeManager/blob/main/LICENSE
-.PROJECTURI https://github.com/ennnbeee/EndpointPrivilegeManager
+.LICENSEURI https://github.com/ennnbeee/EPManager/blob/main/LICENSE
+.PROJECTURI https://github.com/ennnbeee/EPManager
 .ICONURI
 .EXTERNALMODULEDEPENDENCIES Microsoft.Graph.Authentication
 .REQUIREDSCRIPTS
@@ -15,14 +15,16 @@
 .RELEASENOTES
 v0.1 - Initial release
 v0.2 - Updated logic
+v0.3 - Improved Functions and information.
 
 .PRIVATEDATA
 #>
 <#
 .SYNOPSIS
-EndpointPrivilegeManager - Export elevation data and import to create EPM Rules
+EPManager - Export elevation data from Intune and import to create EPM Rule policies.
 
 .DESCRIPTION
+Used to export elevation requests reporting to Intune to CSV, allowing to modify the CSV file to create EPM rule policies and assign based on provided groups.
 
 .PARAMETER tenantId
 Provide the Id of the tenant to connect to.
@@ -47,16 +49,16 @@ Only used with import, used assign profiles after creating them.
 
 
 .EXAMPLE
-PS> .\EndpointPrivilegeManager.ps1 -tenantId 36019fe7-a342-4d98-9126-1b6f94904ac7 -report
+PS> .\EPManager.ps1 -tenantId 36019fe7-a342-4d98-9126-1b6f94904ac7 -report
 
 .EXAMPLE
-PS> .\EndpointPrivilegeManager.ps1 -tenantId 36019fe7-a342-4d98-9126-1b6f94904ac7 -import -importPath "EPM-Report-20250321-105116.csv"
+PS> .\EPManager.ps1 -tenantId 36019fe7-a342-4d98-9126-1b6f94904ac7 -import -importPath "EPM-Report-20250321-105116.csv"
 
 .EXAMPLE
-PS> .\EndpointPrivilegeManager.ps1 -tenantId 36019fe7-a342-4d98-9126-1b6f94904ac7 -import -importPath "EPM-Report-20250321-105116.csv" -assign
+PS> .\EPManager.ps1 -tenantId 36019fe7-a342-4d98-9126-1b6f94904ac7 -import -importPath "EPM-Report-20250321-105116.csv" -assign
 
 .NOTES
-Version:        0.2
+Version:        0.3
 Author:         Nick Benton
 WWW:            oddsandendpoints.co.uk
 Creation Date:  21/03/2025
@@ -66,7 +68,7 @@ Creation Date:  21/03/2025
 [CmdletBinding(DefaultParameterSetName = 'Default')]
 param(
 
-    [Parameter(Mandatory = $true, HelpMessage = 'Provide the Id of the Entra ID tenant to connect to')]
+    [Parameter(Mandatory = $false, HelpMessage = 'Provide the Id of the Entra ID tenant to connect to')]
     [ValidateLength(36, 36)]
     [String]$tenantId,
 
@@ -84,10 +86,10 @@ param(
     [Parameter(Mandatory = $false, ParameterSetName = 'Import', HelpMessage = 'Allows the import of new rules based on the report')]
     [switch]$import,
 
-    [Parameter(Mandatory = $true, ParameterSetName = 'Import', HelpMessage = 'Path to the report import path')]
+    [Parameter(Mandatory = $true, ParameterSetName = 'Import', HelpMessage = 'Path to the report file used for importing new rules')]
     [String]$importFile,
 
-    [Parameter(Mandatory = $false, ParameterSetName = 'Import')]
+    [Parameter(Mandatory = $false, ParameterSetName = 'Import', HelpMessage = 'Whether to assign the create rule policies to the provided groups')]
     [switch]$assign,
 
     [Parameter(Mandatory = $false)]
@@ -99,6 +101,13 @@ param(
     [string]$elevationGrouping = 'Hash'
 
 )
+
+if ($report -and $import) {
+    Write-Host ''
+    Write-Host "Please select only 'report' or 'import' when running the script." -ForegroundColor Red
+    Write-Host ''
+    break
+}
 
 #region Functions
 Function Connect-ToGraph {
@@ -240,7 +249,7 @@ Function Get-DeviceEPMReport() {
 
     }
     catch {
-        Write-Error $Error[0].ErrorDetails.Message
+        Write-Error $_.Exception.Message
         break
     }
 }
@@ -265,7 +274,7 @@ Function Get-IntuneGroup() {
 
     }
     catch {
-        Write-Error $Error[0].ErrorDetails.Message
+        Write-Error $_.Exception.Message
         break
     }
 }
@@ -309,13 +318,13 @@ Function Get-DeviceSettingsCatalog() {
         }
     }
     catch {
-        Write-Error $Error[0].ErrorDetails.Message
+        Write-Error $_.Exception.Message
         break
     }
 }
 Function New-DeviceSettingsCatalog() {
 
-    [cmdletbinding()]
+    [CmdletBinding(SupportsShouldProcess, ConfirmImpact = 'low')]
 
     param
     (
@@ -325,16 +334,24 @@ Function New-DeviceSettingsCatalog() {
 
     $graphApiVersion = 'Beta'
     $Resource = 'deviceManagement/configurationPolicies'
+    if ($PSCmdlet.ShouldProcess('Creating new Device Settings Catalog')) {
+        try {
+            Test-JSONData -Json $JSON
+            $uri = "https://graph.microsoft.com/$graphApiVersion/$($Resource)"
+            Invoke-MgGraphRequest -Uri $uri -Method Post -Body $JSON -ContentType 'application/json'
+        }
+        catch {
+            Write-Error $_.Exception.Message
+            break
+        }
+    }
+    elseif ($WhatIfPreference.IsPresent) {
+        Write-Output 'Setting Catalog policy would have been created'
+    }
+    else {
+        Write-Output 'Setting Catalog was not created'
+    }
 
-    try {
-        Test-JSONData -Json $JSON
-        $uri = "https://graph.microsoft.com/$graphApiVersion/$($Resource)"
-        Invoke-MgGraphRequest -Uri $uri -Method Post -Body $JSON -ContentType 'application/json'
-    }
-    catch {
-        Write-Error $Error[0].ErrorDetails.Message
-        break
-    }
 }
 Function Add-DeviceSettingsCatalogAssignment() {
 
@@ -383,10 +400,9 @@ Function Add-DeviceSettingsCatalogAssignment() {
         # POST to Graph Service
         $uri = "https://graph.microsoft.com/$graphApiVersion/$($Resource)"
         Invoke-MgGraphRequest -Uri $uri -Method Post -Body $JSON -ContentType 'application/json'
-        Write-Host "Successfully assigned policy $name" -ForegroundColor Green
     }
     catch {
-        Write-Error $Error[0].ErrorDetails.Message
+        Write-Error $_.Exception.Message
         break
     }
 }
@@ -408,11 +424,29 @@ Function Get-TenantDetail() {
         (Invoke-MgGraphRequest -Uri $uri -Method GET -OutputType PSObject).value
     }
     catch {
-        Write-Error $Error[0].ErrorDetails.Message
+        Write-Error $_.Exception.Message
         break
     }
 }
 #endregion Functions
+
+#region intro
+Write-Host '
+ _______ ______ _______
+|    ___|   __ \   |   |.---.-.-----.---.-.-----.-----.----.
+|    ___|    __/       ||  _  |     |  _  |  _  |  -__|   _|
+|_______|___|  |__|_|__||___._|__|__|___._|___  |_____|__|
+                                          |_____|
+' -ForegroundColor Red
+
+Write-Host 'EPManager - Export elevation data from Intune and import to create EPM Rule policies.' -ForegroundColor Green
+Write-Host 'Nick Benton - oddsandendpoints.co.uk' -NoNewline;
+Write-Host ' | Version' -NoNewline; Write-Host ' 0.3 Public Preview' -ForegroundColor Yellow -NoNewline
+Write-Host ' | Last updated: ' -NoNewline; Write-Host '2025-03-21' -ForegroundColor Magenta
+Write-Host ''
+Write-Host 'If you have any feedback, please open an issue at https://github.com/ennnbeee/EndpointPrivilegeManager/issues' -ForegroundColor Cyan
+Write-Host ''
+#endregion intro
 
 #region variables
 $requiredScopes = @('Group.Read.All', 'DeviceManagementConfiguration.ReadWrite.All', 'DeviceManagementManagedDevices.Read.All')
@@ -538,7 +572,11 @@ if ($report) {
 
     # CSV Report
     $epmReport | Sort-Object ElevationCount -Descending | Export-Csv -Path $csvFile -NoTypeInformation
-    Write-Host "Report exported to $csvFile" -ForegroundColor Green
+    Write-Host ''
+    Write-Host "EPM Activity report exported to $csvFile" -ForegroundColor Green
+    Write-Host ''
+    Write-Host "Before running the script with the '-import' switch, update the exported file with the rules to be created." -ForegroundColor Cyan
+    Write-Host ''
 }
 #endregion Report
 
@@ -553,6 +591,7 @@ if ($import) {
 
     #region Validation
     Write-Host 'Beginning validation of the imported policies.' -ForegroundColor Cyan
+    write-host ''
     $issuesElevationType = 0
     $issuesChildProcessBehaviour = 0
     $issuesGroup = 0
@@ -574,17 +613,20 @@ if ($import) {
         }
     }
     Write-Host 'Completed validation of the imported policies.' -ForegroundColor Green
-
+    write-host ''
     If ($issuesElevationType -ne 0) {
-        Write-Host "Incorrect Evalation type specified in the report, please review the import file and use one of the following settings $($elevationTypes -join '/') for elevation type." -ForegroundColor Yellow
+        Write-Host "Incorrect Elevation type specified in the report, please review the import file and use one of the following settings $($elevationTypes -join '/') for elevation type." -ForegroundColor Red
+        write-host ''
         Break
     }
     If ($issuesChildProcessBehaviour -ne 0) {
-        Write-Host "Incorrect Child Process Behaviour type specified in the report, please review the import file and use one of the following settings $($childProcessBehaviours -join '/') for behaviour type." -ForegroundColor Yellow
+        Write-Host "Incorrect Child Process Behaviour type specified in the report, please review the import file and use one of the following settings $($childProcessBehaviours -join '/') for behaviour type." -ForegroundColor Red
+        write-host ''
         Break
     }
     If ($issuesGroup -ne 0) {
-        Write-Host 'Incorrect Group Names specified in the report, please review the import file and ensure the correct Group is configured.' -ForegroundColor Yellow
+        Write-Host 'Incorrect Group Names specified in the report, please review the import file and ensure the correct Group is configured.' -ForegroundColor Red
+        write-host ''
         Break
     }
     #endregion Validation
@@ -593,10 +635,11 @@ if ($import) {
         $group = Get-IntuneGroup -Name $policy.Name
         $rules = $policy.Group
         $JSONRules = @()
-        $policyName = "EPM Policy for $($group.displayName)"
-        $PolicyDescription = "EPM Policy for $($group.displayName) created on $date"
+        $policyName = "EPManager created policy for $($group.displayName)"
+        $PolicyDescription = "EPManager created policy for $($group.displayName) created on $date"
         if ($null -ne (Get-DeviceSettingsCatalog -EPM | Where-Object { $_.Name -eq $policyName })) {
-            Write-Host "EPM policy $policyName already exists" -ForegroundColor Yellow
+            Write-Host "EPM policy $policyName already exists" -ForegroundColor Red
+            Write-Host
             break
         }
         $JSONPolicyStart = @"
@@ -1178,12 +1221,19 @@ if ($import) {
 
         # Combines all JSON ready to push to Graph
         $JSONOutput = $JSONPolicyStart + $JSONRules + $JSONPolicyEnd
+        Write-Warning "Please confirm you are happy to create the EPM Rule Policy" -WarningAction Inquire
         $EPMPolicy = New-DeviceSettingsCatalog -JSON $JSONOutput
-        Write-Host "Successfully created Elevation Rules Policy" -ForegroundColor Green
+        Write-Host ''
+        Write-Host 'Successfully created Elevation Rules Policy' -ForegroundColor Green
+        Write-Host ''
 
         if ($assign) {
+            Write-Warning "Please confirm you are happy to assign the EPM Rule Policy" -WarningAction Inquire
             Add-DeviceSettingsCatalogAssignment -Id $EPMPolicy.id -groupId $group.id -assignmentType Include -name $EPMPolicy.name
+            Write-Host ''
             Write-Host "Successfully assigned Elevation Rules Policy to $($group.displayname)" -ForegroundColor Green
+            Write-Host ''
+
         }
 
     }
