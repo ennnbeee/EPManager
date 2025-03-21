@@ -591,7 +591,7 @@ if ($import) {
 
     #region Validation
     Write-Host 'Beginning validation of the imported policies.' -ForegroundColor Cyan
-    write-host ''
+    Write-Host ''
     $issuesElevationType = 0
     $issuesChildProcessBehaviour = 0
     $issuesGroup = 0
@@ -613,20 +613,20 @@ if ($import) {
         }
     }
     Write-Host 'Completed validation of the imported policies.' -ForegroundColor Green
-    write-host ''
+    Write-Host ''
     If ($issuesElevationType -ne 0) {
         Write-Host "Incorrect Elevation type specified in the report, please review the import file and use one of the following settings $($elevationTypes -join '/') for elevation type." -ForegroundColor Red
-        write-host ''
+        Write-Host ''
         Break
     }
     If ($issuesChildProcessBehaviour -ne 0) {
         Write-Host "Incorrect Child Process Behaviour type specified in the report, please review the import file and use one of the following settings $($childProcessBehaviours -join '/') for behaviour type." -ForegroundColor Red
-        write-host ''
+        Write-Host ''
         Break
     }
     If ($issuesGroup -ne 0) {
         Write-Host 'Incorrect Group Names specified in the report, please review the import file and ensure the correct Group is configured.' -ForegroundColor Red
-        write-host ''
+        Write-Host ''
         Break
     }
     #endregion Validation
@@ -1221,14 +1221,14 @@ if ($import) {
 
         # Combines all JSON ready to push to Graph
         $JSONOutput = $JSONPolicyStart + $JSONRules + $JSONPolicyEnd
-        Write-Warning "Please confirm you are happy to create the EPM Rule Policy" -WarningAction Inquire
+        Write-Warning 'Please confirm you are happy to create the EPM Rule Policy' -WarningAction Inquire
         $EPMPolicy = New-DeviceSettingsCatalog -JSON $JSONOutput
         Write-Host ''
         Write-Host 'Successfully created Elevation Rules Policy' -ForegroundColor Green
         Write-Host ''
 
         if ($assign) {
-            Write-Warning "Please confirm you are happy to assign the EPM Rule Policy" -WarningAction Inquire
+            Write-Warning 'Please confirm you are happy to assign the EPM Rule Policy' -WarningAction Inquire
             Add-DeviceSettingsCatalogAssignment -Id $EPMPolicy.id -groupId $group.id -assignmentType Include -name $EPMPolicy.name
             Write-Host ''
             Write-Host "Successfully assigned Elevation Rules Policy to $($group.displayname)" -ForegroundColor Green
