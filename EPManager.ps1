@@ -1,6 +1,6 @@
 <#PSScriptInfo
 
-.VERSION 0.3
+.VERSION 0.3.2
 .GUID dda70c3d-e3c9-44cb-9acf-6e452e36d9d5
 .AUTHOR Nick Benton
 .COMPANYNAME odds+endpoints
@@ -16,6 +16,8 @@
 v0.1 - Initial release
 v0.2 - Updated logic
 v0.3 - Improved Functions and information.
+v0.3.1 - Resolved parameter issues
+v0.3.2 - Updated to allow for multiple rules of the same file
 
 .PRIVATEDATA
 #>
@@ -58,10 +60,10 @@ PS> .\EPManager.ps1 -tenantId 36019fe7-a342-4d98-9126-1b6f94904ac7 -import -impo
 PS> .\EPManager.ps1 -tenantId 36019fe7-a342-4d98-9126-1b6f94904ac7 -import -importPath "EPM-Report-20250321-105116.csv" -assign
 
 .NOTES
-Version:        0.3
+Version:        0.3.2
 Author:         Nick Benton
 WWW:            oddsandendpoints.co.uk
-Creation Date:  21/03/2025
+Creation Date:  24/03/2025
 
 #>
 
@@ -683,6 +685,7 @@ if ($import) {
 '@
 
         foreach ($rule in $rules) {
+            $ruleName = "$($rule.FilePath)\$($rule.FileName)-$($rule.FileHash)"
             $fileName = $rule.FileName
             $fileInternalName = $rule.FileInternalName
             $filePath = $rule.FilePath
@@ -918,7 +921,7 @@ if ($import) {
                                 },
                                 "simpleSettingValue": {
                                 "@odata.type": "#microsoft.graph.deviceManagementConfigurationStringSettingValue",
-                                "value": "$fileDescription $typeDescription",
+                                "value": "$ruleName",
                                 "settingValueTemplateReference": {
                                     "settingValueTemplateId": "03f003e5-43ef-4e7e-bf30-57f00781fdcc",
                                     "useTemplateDefault": false
@@ -1131,7 +1134,7 @@ if ($import) {
                             "simpleSettingValue": {
                             "@odata.type": "#microsoft.graph.deviceManagementConfigurationStringSettingValue",
                             "settingValueTemplateReference": null,
-                            "value": "$fileDescription $typeDescription"
+                            "value": "$ruleName"
                             }
                         },
                         {
