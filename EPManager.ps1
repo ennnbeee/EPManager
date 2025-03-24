@@ -76,22 +76,22 @@ param(
     [ValidateLength(36, 36)]
     [String]$appId,
 
-    [Parameter(Mandatory = $true, HelpMessage = 'Provide the App secret to allow for authentication to graph')]
+    [Parameter(Mandatory = $false, HelpMessage = 'Provide the App secret to allow for authentication to graph')]
     [ValidateNotNullOrEmpty()]
     [String]$appSecret,
 
     [Parameter(Mandatory = $false, HelpMessage = 'Generates and downloads EPM report details')]
     [switch]$report,
 
-    [Parameter(ParameterSetName = 'Import')]
+
     [Parameter(Mandatory = $false, HelpMessage = 'Allows the import of new rules based on the report')]
     [switch]$import,
 
-    [Parameter(ParameterSetName = 'Import')]
-    [Parameter(Mandatory = $true, HelpMessage = 'Path to the report file used for importing new rules')]
+
+    [Parameter(Mandatory = $false, HelpMessage = 'Path to the report file used for importing new rules')]
     [String]$importFile,
 
-    [Parameter(ParameterSetName = 'Import')]
+
     [Parameter(Mandatory = $false, HelpMessage = 'Whether to assign the create rule policies to the provided groups')]
     [switch]$assign,
 
