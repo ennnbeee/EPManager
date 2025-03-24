@@ -72,24 +72,27 @@ param(
     [ValidateLength(36, 36)]
     [String]$tenantId,
 
-    [Parameter(Mandatory = $false, ParameterSetName = 'appAuth', HelpMessage = 'Provide the Id of the Entra App registration to be used for authentication')]
+    [Parameter(Mandatory = $false, HelpMessage = 'Provide the Id of the Entra App registration to be used for authentication')]
     [ValidateLength(36, 36)]
     [String]$appId,
 
-    [Parameter(Mandatory = $true, ParameterSetName = 'appAuth', HelpMessage = 'Provide the App secret to allow for authentication to graph')]
+    [Parameter(Mandatory = $true, HelpMessage = 'Provide the App secret to allow for authentication to graph')]
     [ValidateNotNullOrEmpty()]
     [String]$appSecret,
 
     [Parameter(Mandatory = $false, HelpMessage = 'Generates and downloads EPM report details')]
     [switch]$report,
 
-    [Parameter(Mandatory = $false, ParameterSetName = 'Import', HelpMessage = 'Allows the import of new rules based on the report')]
+    [Parameter(ParameterSetName = 'Import')]
+    [Parameter(Mandatory = $false, HelpMessage = 'Allows the import of new rules based on the report')]
     [switch]$import,
 
-    [Parameter(Mandatory = $true, ParameterSetName = 'Import', HelpMessage = 'Path to the report file used for importing new rules')]
+    [Parameter(ParameterSetName = 'Import')]
+    [Parameter(Mandatory = $true, HelpMessage = 'Path to the report file used for importing new rules')]
     [String]$importFile,
 
-    [Parameter(Mandatory = $false, ParameterSetName = 'Import', HelpMessage = 'Whether to assign the create rule policies to the provided groups')]
+    [Parameter(ParameterSetName = 'Import')]
+    [Parameter(Mandatory = $false, HelpMessage = 'Whether to assign the create rule policies to the provided groups')]
     [switch]$assign,
 
     [Parameter(Mandatory = $false)]
@@ -449,7 +452,8 @@ Write-Host ''
 #endregion intro
 
 #region variables
-$requiredScopes = @('Group.Read.All', 'DeviceManagementConfiguration.ReadWrite.All', 'DeviceManagementManagedDevices.Read.All')
+$requiredScopes = @('Group.Read.All', 'DeviceManagementConfiguration.ReadWrite.All','Organization.Read.All','DeviceManagementConfiguration.Read.All','DeviceManagementManagedDevices.Read.All')
+#$requiredScopes = @('Group.Read.All', 'DeviceManagementConfiguration.ReadWrite.All', 'DeviceManagementManagedDevices.Read.All')
 [String[]]$scopes = $requiredScopes -join ', '
 $elevationTypes = @('Automatic', 'UserAuthentication', 'UserJustification', 'SupportApproved')
 $childProcessBehaviours = @('AllowAll', 'RequireRule', 'DenyAll', 'NotConfigured')
@@ -646,7 +650,7 @@ if ($import) {
         $policyName = "EPManager created policy for $($group.displayName)"
         $PolicyDescription = "EPManager created policy for $($group.displayName) created on $date"
         if ($null -ne (Get-DeviceSettingsCatalog -EPM | Where-Object { $_.Name -eq $policyName })) {
-            Write-Host "EPM policy $policyName already exists" -ForegroundColor Red
+            Write-Host "EPM policy '$policyName' already exists in Intune." -ForegroundColor Red
             Write-Host
             break
         }
