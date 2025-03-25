@@ -1,6 +1,6 @@
 <#PSScriptInfo
 
-.VERSION 0.4
+.VERSION 0.4.1
 .GUID dda70c3d-e3c9-44cb-9acf-6e452e36d9d5
 .AUTHOR Nick Benton
 .COMPANYNAME odds+endpoints
@@ -20,6 +20,7 @@ v0.3.1 - Resolved parameter issues
 v0.3.2 - Updated to allow for multiple rules of the same file
 v0.3.3 - Updated policy naming, introduced rule count limit, updated validation
 v0.4 - Improved validation of report data
+v0.4.1 - Parameter requirements
 
 .PRIVATEDATA
 #>
@@ -68,51 +69,47 @@ PS> .\EPManager.ps1 -tenantId 36019fe7-a342-4d98-9126-1b6f94904ac7 -import -impo
 PS> .\EPManager.ps1 -tenantId 36019fe7-a342-4d98-9126-1b6f94904ac7 -import -importPath "EPM-Report-20250321-105116.csv" -assign
 
 .NOTES
-Version:        0.4
+Version:        0.4.1
 Author:         Nick Benton
 WWW:            oddsandendpoints.co.uk
 Creation Date:  25/03/2025
 
 #>
 
-[CmdletBinding(DefaultParameterSetName = 'Default')]
+[CmdletBinding()]
 param(
 
-    [Parameter(Mandatory = $false, HelpMessage = 'Provide the Id of the Entra ID tenant to connect to')]
+    [Parameter(HelpMessage = 'Provide the Id of the Entra ID tenant to connect to')]
     [ValidateLength(36, 36)]
     [String]$tenantId,
 
-    [Parameter(ParameterSetName = 'appAuth')]
-    [Parameter(Mandatory = $false, HelpMessage = 'Provide the Id of the Entra App registration to be used for authentication')]
+    [Parameter(HelpMessage = 'Provide the Id of the Entra App registration to be used for authentication')]
     [ValidateLength(36, 36)]
     [String]$appId,
 
-    [Parameter(ParameterSetName = 'appAuth')]
-    [Parameter(Mandatory = $true, HelpMessage = 'Provide the App secret to allow for authentication to graph')]
+    [Parameter(HelpMessage = 'Provide the App secret to allow for authentication to graph')]
     [ValidateNotNullOrEmpty()]
     [String]$appSecret,
 
-    [Parameter(Mandatory = $false, HelpMessage = 'Generates and downloads EPM report details')]
+    [Parameter(HelpMessage = 'Generates and downloads EPM report details')]
     [switch]$report,
 
-    [Parameter(Mandatory = $false, HelpMessage = 'Allows the import of new rules based on the report')]
+    [Parameter(HelpMessage = 'Allows the import of new rules based on the report')]
     [switch]$import,
 
-    [Parameter(Mandatory = $true, HelpMessage = 'Path to the report file used for importing new rules')]
+    [Parameter(HelpMessage = 'Path to the report file used for importing new rules')]
     [String]$importFile,
 
-    [Parameter(Mandatory = $false, HelpMessage = 'Whether to assign the create rule policies to the provided groups')]
+    [Parameter(HelpMessage = 'Whether to assign the create rule policies to the provided groups')]
     [switch]$assign,
 
-    [Parameter(Mandatory = $false)]
     [ValidateSet('All', 'Unmanaged', 'Automatic', 'UserConfirmed', 'SupportApproved')]
     [String]$elevationMode = 'All',
 
-    [Parameter(Mandatory = $false)]
     [ValidateSet('Hash')]
     [string]$elevationGrouping = 'Hash',
 
-    [Parameter(Mandatory = $false, HelpMessage = 'WhatIf mode to simulate changes')]
+    [Parameter(HelpMessage = 'WhatIf mode to simulate changes')]
     [switch]$whatIf
 
 )
@@ -755,14 +752,14 @@ if ($import) {
 '@
         foreach ($rule in $rules) {
             $ruleName = "$($rule.FileName)-$($rule.FileHash)"
-            $fileName = $rule.FileName -replace "^(.{50}).*", '$1'
-            $fileInternalName = $rule.FileInternalName -replace "^(.{50}).*", '$1'
+            $fileName = $rule.FileName -replace '^(.{50}).*', '$1'
+            $fileInternalName = $rule.FileInternalName -replace '^(.{50}).*', '$1'
             $filePath = $rule.FilePath
             $fileHash = $rule.FileHash
             $elevationType = $rule.ElevationType
             $childProcess = $rule.ChildProcessBehaviour
-            $fileProduct = $($rule.Product -replace '[^\x30-\x39\x41-\x5A\x61-\x7A]+', ' ') -replace "^(.{50}).*", '$1'
-            $fileDescription = $rule.Description -replace "^(.{50}).*", '$1'
+            $fileProduct = $($rule.Product -replace '[^\x30-\x39\x41-\x5A\x61-\x7A]+', ' ') -replace '^(.{50}).*', '$1'
+            $fileDescription = $rule.Description -replace '^(.{50}).*', '$1'
             $ruleDescription = $($rule.Publisher + ' ' + $rule.Description) -replace '[^\x30-\x39\x41-\x5A\x61-\x7A]+', ' '
 
             # First Rule needs TemplateIDs in the JSON
