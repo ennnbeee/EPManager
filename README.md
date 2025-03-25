@@ -19,33 +19,50 @@ EPManager is currently in Public Preview, meaning that although the it is functi
 
 ## 🔄 Updates
 
-- **v0.3**
+- **v0.4**
+  - Improved validation of imported rules
+  - Added a `whatIf` mode to allow for export of JSON data for review
+- v0.3
   - Improved Functions and information.
 - v0.2
   - Updated logic for hash grouping of exported rules
 - v0.1
   - Initial release
 
-## ⏯ Usage
+## 🔑 Permissions
 
-Run  the script to capture EPM report data to a CSV file in the same location as the PowerShell script:
+The PowerShell script requires the below Graph API permissions, you can create an Entra ID App Registration with the following Graph API Application permissions:
+
+- `Group.Read.All`
+- `DeviceManagementConfiguration.ReadWrite.All`
+- `Organization.Read.All`
+- `DeviceManagementConfiguration.Read.All`
+- `DeviceManagementManagedDevices.Read.All`
+
+Then you can authenticate using the below:
 
 ```powershell
-.\EPManager.ps1 -tenantID '437e8ffb-3030-469a-99da-e5b527908099' -report
+.\EPManager.ps1 -tenantID '437e8ffb-3030-469a-99da-e5b527908099' -appId '799ebcfa-ca81-4e63-baaf-a35123164d78' -appSecret 'g708Q~uot4xo9dU_1TjGQIuUr0UyBHNZmY2mdcy6' -report
+```
+
+## ⏯ Usage
+
+Run the script to capture EPM report data to a CSV file in the same location as the PowerShell script:
+
+```powershell
+.\EPManager.ps1 -report
 ```
 
 After modifying the exported CSV file, it can then be imported with the below command to add new policies to Intune:
 
 ```powershell
-.\EPManager.ps1 -tenantID '437e8ffb-3030-469a-99da-e5b527908099' -import -importPath ".\EPManager-Report-20250321-111725.csv"
+.\EPManager.ps1 -import -importPath ".\EPManager-Report-20250321-111725.csv"
 ```
-
-OR
 
 After modifying the exported CSV file, it can then be imported with the below command to add new policies to Intune and assign them to specified groups:
 
 ```powershell
-.\EPManager.ps1  -tenantID '437e8ffb-3030-469a-99da-e5b527908099' -import -importPath ".\EPManager-Report-20250321-111725.csv" -assign
+.\EPManager.ps1 -import -importPath ".\EPManager-Report-20250321-111725.csv" -assign
 ```
 
 ## 🚑 Support
