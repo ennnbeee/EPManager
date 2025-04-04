@@ -19,7 +19,9 @@ EPManager is currently in Public Preview, meaning that although the it is functi
 
 ## 🔄 Updates
 
-- **v0.4**
+- **v0.5**
+  - Improved function to use export report data for large environments
+- v0.4
   - Improved validation of imported rules
   - Added a `whatIf` mode to allow for export of JSON data for review
 - v0.3
