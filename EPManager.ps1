@@ -1,6 +1,6 @@
 <#PSScriptInfo
 
-.VERSION 0.4.1
+.VERSION 0.5
 .GUID dda70c3d-e3c9-44cb-9acf-6e452e36d9d5
 .AUTHOR Nick Benton
 .COMPANYNAME odds+endpoints
@@ -21,6 +21,7 @@ v0.3.2 - Updated to allow for multiple rules of the same file
 v0.3.3 - Updated policy naming, introduced rule count limit, updated validation
 v0.4 - Improved validation of report data
 v0.4.1 - Parameter requirements
+v0.5 - Updated functions to use Export Jobs instead of Graph Calls for elevation reports
 
 .PRIVATEDATA
 #>
@@ -69,10 +70,10 @@ PS> .\EPManager.ps1 -tenantId 36019fe7-a342-4d98-9126-1b6f94904ac7 -import -impo
 PS> .\EPManager.ps1 -tenantId 36019fe7-a342-4d98-9126-1b6f94904ac7 -import -importPath "EPM-Report-20250321-105116.csv" -assign
 
 .NOTES
-Version:        0.4.1
+Version:        0.5
 Author:         Nick Benton
 WWW:            oddsandendpoints.co.uk
-Creation Date:  25/03/2025
+Creation Date:  04/04/2025
 
 #>
 
@@ -216,7 +217,7 @@ Function Test-JSONData() {
     }
 
 }
-Function Get-DeviceEPMReport() {
+Function Get-DeviceEPMElevations() {
 
     [cmdletbinding()]
 
@@ -265,6 +266,89 @@ Function Get-DeviceEPMReport() {
         break
     }
 }
+
+Function New-DeviceEPMReport() {
+
+    [CmdletBinding(SupportsShouldProcess, ConfirmImpact = 'low')]
+
+    param (
+
+        [Parameter(Mandatory = $false)]
+        [ValidateSet('All', 'Unmanaged', 'Automatic', 'UserConfirmed', 'SupportApproved')]
+        [String]$type
+
+    )
+
+    $graphApiVersion = 'beta'
+    $Resource = 'deviceManagement/reports/exportJobs'
+
+    switch ($type) {
+        'All' { $reportFilter = $null }
+        'Unmanaged' { $reportFilter = "(ElevationType eq 'UnmanagedElevation')" }
+        'Automatic' { $reportFilter = "(ElevationType eq 'zeroTouchElevation')" }
+        'UserConfirmed' { $reportFilter = "(ElevationType eq 'userConfirmedElevation')" }
+        'SupportApproved' { $reportFilter = "(ElevationType eq 'supportApprovedElevation')" }
+        Default { $reportFilter = $null }
+    }
+
+    $JSON = @"
+{
+    "reportName":"EpmElevationReportElevationEvent",
+    "filter": "$reportFilter",
+    "select":[
+
+    ],
+    "format":"csv",
+    "snapshotId":null
+}
+"@
+
+    if ($PSCmdlet.ShouldProcess('Creating new Elevation Report')) {
+        try {
+            Test-JSONData -Json $JSON
+            $uri = "https://graph.microsoft.com/$graphApiVersion/$($Resource)"
+            Invoke-MgGraphRequest -Uri $uri -Method Post -Body $JSON -ContentType 'application/json'
+        }
+        catch {
+            Write-Error $_.Exception.Message
+            break
+        }
+    }
+    elseif ($WhatIfPreference.IsPresent) {
+        Write-Output 'Elevation Report would have been created'
+    }
+    else {
+        Write-Output 'Elevation Report was not created'
+    }
+}
+
+Function Get-DeviceEPMReport() {
+
+    [CmdletBinding()]
+
+    param (
+
+        [parameter(Mandatory = $true)]
+        $Id
+
+    )
+
+    $graphApiVersion = 'beta'
+    $Resource = "deviceManagement/reports/exportJobs('$Id')"
+
+    try {
+
+        $uri = "https://graph.microsoft.com/$graphApiVersion/$($Resource)"
+
+        Invoke-MgGraphRequest -Uri $uri -Method Get -OutputType PSObject
+
+    }
+    catch {
+        Write-Error $_.Exception.Message
+        break
+    }
+}
+
 Function Get-IntuneGroup() {
 
     [cmdletbinding()]
@@ -461,6 +545,7 @@ Write-Host ''
 #endregion intro
 
 #region variables
+$rndWait = Get-Random -Minimum 1 -Maximum 3
 $date = (Get-Date -Format 'yyyyMMdd-HHmmss').ToString()
 $requiredScopes = @('Group.Read.All', 'DeviceManagementConfiguration.ReadWrite.All', 'Organization.Read.All', 'DeviceManagementConfiguration.Read.All', 'DeviceManagementManagedDevices.Read.All')
 #$requiredScopes = @('Group.Read.All', 'DeviceManagementConfiguration.ReadWrite.All', 'DeviceManagementManagedDevices.Read.All')
@@ -538,19 +623,39 @@ if ($report) {
     }
 
     $epmReport = @()
-    $elevations = Get-DeviceEPMReport -type $elevationMode
+    #$elevations = Get-DeviceEPMElevations -type $elevationMode
 
-    if ($elevations.count -eq 0) {
+    $elevationReport = New-DeviceEPMReport -type $elevationMode
+    While ((Get-DeviceEPMReport -Id $elevationReport.id).status -ne 'completed') {
+        Write-Host 'Waiting for the Elevation Update report to finish processing...' -ForegroundColor Cyan
+        Start-Sleep -Seconds $rndWait
+    }
+
+    Write-Host "EPM report for $elevationMode elevations completed processing." -ForegroundColor Green
+    Write-Host
+    Write-Host 'Getting EPM Report data...' -ForegroundColor Magenta
+    Write-Host
+
+    $csvUrl = (Get-DeviceEPMReport -Id $elevationReport.id).url
+    $csvHeader = @{Accept = '*/*'; 'accept-encoding' = 'gzip, deflate, br, zstd' }
+    Add-Type -AssemblyName System.IO.Compression
+    $csvReportStream = Invoke-WebRequest -Uri $csvURL -Method Get -Headers $csvHeader -UseBasicParsing -ErrorAction Stop -Verbose
+    $csvReportZip = [System.IO.Compression.ZipArchive]::new([System.IO.MemoryStream]::new($csvReportStream.Content))
+    $csvReportElevations = [System.IO.StreamReader]::new($csvReportZip.GetEntry($csvReportZip.Entries[0]).open()).ReadToEnd() | ConvertFrom-Csv
+
+
+
+    if ($csvReportElevations.count -eq 0) {
         Write-Host ''
         Write-Host "No elevations with mode $elevationMode found in Intune." -ForegroundColor Red
         Write-Host ''
         Break
     }
     Write-Host ''
-    Write-Host "Found $($elevations.count) $elevationMode elevations in Intune." -ForegroundColor Cyan
+    Write-Host "Found $($csvReportElevations.count) $elevationMode elevation(s) in Intune." -ForegroundColor Cyan
     Write-Host ''
 
-    $groupedElevations = $elevations | Group-Object -Property $grouping
+    $groupedElevations = $csvReportElevations | Group-Object -Property $grouping
 
     foreach ($groupedElevation in $groupedElevations) {
 
