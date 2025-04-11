@@ -7,7 +7,7 @@ EPManager is a PowerShell based utility that allows for bulk export and creation
 EPManager is currently in Public Preview, meaning that although the it is functional, you may encounter issues or bugs with the script.
 
 > [!TIP]
-> If you do encounter bugs, want to contribute, submit feedback or suggestions, please create and an issue.
+> If you do encounter bugs, want to contribute, submit feedback or suggestions, please create an issue.
 
 ## 🗒 Prerequisites
 
