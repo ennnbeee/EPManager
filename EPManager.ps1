@@ -1,6 +1,6 @@
 <#PSScriptInfo
 
-.VERSION 0.5
+.VERSION 0.6
 .GUID dda70c3d-e3c9-44cb-9acf-6e452e36d9d5
 .AUTHOR Nick Benton
 .COMPANYNAME odds+endpoints
@@ -22,6 +22,7 @@ v0.3.3 - Updated policy naming, introduced rule count limit, updated validation
 v0.4 - Improved validation of report data
 v0.4.1 - Parameter requirements
 v0.5 - Updated functions to use Export Jobs instead of Graph Calls for elevation reports
+v0.6 - Updated to include Deny rules
 
 .PRIVATEDATA
 #>
@@ -73,24 +74,12 @@ PS> .\EPManager.ps1 -tenantId 36019fe7-a342-4d98-9126-1b6f94904ac7 -import -impo
 Version:        0.5
 Author:         Nick Benton
 WWW:            oddsandendpoints.co.uk
-Creation Date:  04/04/2025
+Creation Date:  11/06/2025
 
 #>
 
 [CmdletBinding()]
 param(
-
-    [Parameter(HelpMessage = 'Provide the Id of the Entra ID tenant to connect to')]
-    [ValidateLength(36, 36)]
-    [String]$tenantId,
-
-    [Parameter(HelpMessage = 'Provide the Id of the Entra App registration to be used for authentication')]
-    [ValidateLength(36, 36)]
-    [String]$appId,
-
-    [Parameter(HelpMessage = 'Provide the App secret to allow for authentication to graph')]
-    [ValidateNotNullOrEmpty()]
-    [String]$appSecret,
 
     [Parameter(HelpMessage = 'Generates and downloads EPM report details')]
     [switch]$report,
@@ -111,7 +100,19 @@ param(
     [string]$elevationGrouping = 'Hash',
 
     [Parameter(HelpMessage = 'WhatIf mode to simulate changes')]
-    [switch]$whatIf
+    [switch]$whatIf,
+
+    [Parameter(HelpMessage = 'Provide the Id of the Entra ID tenant to connect to')]
+    [ValidateLength(36, 36)]
+    [String]$tenantId,
+
+    [Parameter(HelpMessage = 'Provide the Id of the Entra App registration to be used for authentication')]
+    [ValidateLength(36, 36)]
+    [String]$appId,
+
+    [Parameter(HelpMessage = 'Provide the App secret to allow for authentication to graph')]
+    [ValidateNotNullOrEmpty()]
+    [String]$appSecret
 
 )
 
@@ -173,14 +174,14 @@ Connect-ToGraph -tenantId $tenantId -appId $app -appSecret $secret
 
             if ($version -eq 2) {
                 Write-Host 'Version 2 module detected'
-                $accesstokenfinal = ConvertTo-SecureString -String $accessToken -AsPlainText -Force
+                $accessTokenFinal = ConvertTo-SecureString -String $accessToken -AsPlainText -Force
             }
             else {
                 Write-Host 'Version 1 Module Detected'
                 Select-MgProfile -Name Beta
-                $accesstokenfinal = $accessToken
+                $accessTokenFinal = $accessToken
             }
-            $graph = Connect-MgGraph -AccessToken $accesstokenfinal
+            $graph = Connect-MgGraph -AccessToken $accessTokenFinal
             Write-Host "Connected to Intune tenant $TenantId using app-based authentication (Azure AD authentication not supported)"
         }
         else {
@@ -266,7 +267,6 @@ Function Get-DeviceEPMElevations() {
         break
     }
 }
-
 Function New-DeviceEPMReport() {
 
     [CmdletBinding(SupportsShouldProcess, ConfirmImpact = 'low')]
@@ -321,7 +321,6 @@ Function New-DeviceEPMReport() {
         Write-Output 'Elevation Report was not created'
     }
 }
-
 Function Get-DeviceEPMReport() {
 
     [CmdletBinding()]
@@ -348,7 +347,6 @@ Function Get-DeviceEPMReport() {
         break
     }
 }
-
 Function Get-IntuneGroup() {
 
     [cmdletbinding()]
@@ -537,8 +535,8 @@ Write-Host '
 
 Write-Host 'EPManager - Export elevation data from Intune and import to create EPM Rule policies.' -ForegroundColor Green
 Write-Host 'Nick Benton - oddsandendpoints.co.uk' -NoNewline;
-Write-Host ' | Version' -NoNewline; Write-Host ' 0.4 Public Preview' -ForegroundColor Yellow -NoNewline
-Write-Host ' | Last updated: ' -NoNewline; Write-Host '2025-03-25' -ForegroundColor Magenta
+Write-Host ' | Version' -NoNewline; Write-Host ' 0.6 Public Preview' -ForegroundColor Yellow -NoNewline
+Write-Host ' | Last updated: ' -NoNewline; Write-Host '2025-06-11' -ForegroundColor Magenta
 Write-Host ''
 Write-Host 'If you have any feedback, please open an issue at https://github.com/ennnbeee/EndpointPrivilegeManager/issues' -ForegroundColor Cyan
 Write-Host ''
@@ -550,7 +548,7 @@ $date = (Get-Date -Format 'yyyyMMdd-HHmmss').ToString()
 $requiredScopes = @('Group.Read.All', 'DeviceManagementConfiguration.ReadWrite.All', 'Organization.Read.All', 'DeviceManagementConfiguration.Read.All', 'DeviceManagementManagedDevices.Read.All')
 #$requiredScopes = @('Group.Read.All', 'DeviceManagementConfiguration.ReadWrite.All', 'DeviceManagementManagedDevices.Read.All')
 [String[]]$scopes = $requiredScopes -join ', '
-$elevationTypes = @('Automatic', 'UserAuthentication', 'UserJustification', 'SupportApproved')
+$elevationTypes = @('Automatic', 'UserAuthentication', 'UserJustification', 'SupportApproved', 'Deny')
 $childProcessBehaviours = @('AllowAll', 'RequireRule', 'DenyAll', 'NotConfigured')
 #endregion variables
 
@@ -585,7 +583,7 @@ try {
         }
     }
     $context = Get-MgContext
-    $tenantName = ((Get-TenantDetail).verifiedDomains | Where-Object { $_.isinitial -eq $true }).name
+    $tenantName = ((Get-TenantDetail).verifiedDomains | Where-Object { $_.isInitial -eq $true }).name
     Write-Host ''
     Write-Host "Successfully connected to Microsoft Graph tenant $tenantName with ID $($context.TenantId)." -ForegroundColor Green
 }
@@ -954,7 +952,7 @@ if ($import) {
 
                 switch ($elevationType) {
                     'Automatic' {
-                        $JSONRuleElev = @'
+                        $JSONRuleElevation = @'
                         {
                             "@odata.type": "#microsoft.graph.deviceManagementConfigurationChoiceSettingInstance",
                             "choiceSettingValue": {
@@ -974,7 +972,7 @@ if ($import) {
 '@
                     }
                     'UserAuthentication' {
-                        $JSONRuleElev = @'
+                        $JSONRuleElevation = @'
                         {
                             "@odata.type": "#microsoft.graph.deviceManagementConfigurationChoiceSettingInstance",
                             "choiceSettingValue": {
@@ -1006,7 +1004,7 @@ if ($import) {
 '@
                     }
                     'UserJustification' {
-                        $JSONRuleElev = @'
+                        $JSONRuleElevation = @'
                         {
                             "@odata.type": "#microsoft.graph.deviceManagementConfigurationChoiceSettingInstance",
                             "choiceSettingValue": {
@@ -1038,7 +1036,7 @@ if ($import) {
 '@
                     }
                     'SupportApproved' {
-                        $JSONRuleElev = @'
+                        $JSONRuleElevation = @'
                         {
                             "@odata.type": "#microsoft.graph.deviceManagementConfigurationChoiceSettingInstance",
                             "settingDefinitionId": "device_vendor_msft_policy_privilegemanagement_elevationrules_{elevationrulename}_ruletype",
@@ -1060,6 +1058,27 @@ if ($import) {
 
 '@
                     }
+                    'Deny' {
+                        $JSONRuleElevation = @'
+                            {
+                                "@odata.type": "#microsoft.graph.deviceManagementConfigurationChoiceSettingInstance",
+                                "settingDefinitionId": "device_vendor_msft_policy_privilegemanagement_elevationrules_{elevationrulename}_ruletype",
+                                "choiceSettingValue": {
+                                    "@odata.type": "#microsoft.graph.deviceManagementConfigurationChoiceSettingValue",
+                                    "value": "device_vendor_msft_policy_privilegemanagement_elevationrules_{elevationrulename}_deny",
+                                    "children": [],
+                                    "settingValueTemplateReference": {
+                                        "settingValueTemplateId": "cb2ea689-ebc3-42ea-a7a4-c704bb13e3ad"
+                                    }
+                                },
+                                "settingInstanceTemplateReference": {
+                                    "settingInstanceTemplateId": "bc5a31ac-95b5-4ec6-be1f-50a384bb165f"
+                                }
+                            },
+
+'@
+                    }
+
                 }
 
 
@@ -1193,7 +1212,7 @@ if ($import) {
 
                 switch ($elevationType) {
                     'Automatic' {
-                        $JSONRuleElev = @'
+                        $JSONRuleElevation = @'
                         {
                             "@odata.type": "#microsoft.graph.deviceManagementConfigurationChoiceSettingInstance",
                             "settingDefinitionId": "device_vendor_msft_policy_privilegemanagement_elevationrules_{elevationrulename}_ruletype",
@@ -1208,7 +1227,7 @@ if ($import) {
 '@
                     }
                     'UserAuthentication' {
-                        $JSONRuleElev = @'
+                        $JSONRuleElevation = @'
                         {
                             "@odata.type": "#microsoft.graph.deviceManagementConfigurationChoiceSettingInstance",
                             "settingDefinitionId": "device_vendor_msft_policy_privilegemanagement_elevationrules_{elevationrulename}_ruletype",
@@ -1236,7 +1255,7 @@ if ($import) {
 '@
                     }
                     'UserJustification' {
-                        $JSONRuleElev = @'
+                        $JSONRuleElevation = @'
                         {
                             "@odata.type": "#microsoft.graph.deviceManagementConfigurationChoiceSettingInstance",
                             "settingDefinitionId": "device_vendor_msft_policy_privilegemanagement_elevationrules_{elevationrulename}_ruletype",
@@ -1264,13 +1283,27 @@ if ($import) {
 '@
                     }
                     'SupportApproved' {
-                        $JSONRuleElev = @'
+                        $JSONRuleElevation = @'
                         {
                             "@odata.type": "#microsoft.graph.deviceManagementConfigurationChoiceSettingInstance",
                             "settingDefinitionId": "device_vendor_msft_policy_privilegemanagement_elevationrules_{elevationrulename}_ruletype",
                             "choiceSettingValue": {
                                 "@odata.type": "#microsoft.graph.deviceManagementConfigurationChoiceSettingValue",
                                 "value": "device_vendor_msft_policy_privilegemanagement_elevationrules_{elevationrulename}_supportarbitrated",
+                                "children": []
+                            }
+                        },
+
+'@
+                    }
+                    'Deny' {
+                        $JSONRuleElevation = @'
+                        {
+                            "@odata.type": "#microsoft.graph.deviceManagementConfigurationChoiceSettingInstance",
+                            "settingDefinitionId": "device_vendor_msft_policy_privilegemanagement_elevationrules_{elevationrulename}_ruletype",
+                            "choiceSettingValue": {
+                                "@odata.type": "#microsoft.graph.deviceManagementConfigurationChoiceSettingValue",
+                                "value": "device_vendor_msft_policy_privilegemanagement_elevationrules_{elevationrulename}_deny",
                                 "children": []
                             }
                         },
@@ -1391,7 +1424,7 @@ if ($import) {
             }
 
             # Combines the rule
-            $JSONRule = $JSONRuleStart + $JSONRuleElev + $JSONRuleChild + $JSONRuleEnd + $JSONRuleEnding
+            $JSONRule = $JSONRuleStart + $JSONRuleElevation + $JSONRuleChild + $JSONRuleEnd + $JSONRuleEnding
 
             # Adds the rule to the set of rules
             $JSONRules += $JSONRule

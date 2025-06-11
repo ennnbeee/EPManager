@@ -19,7 +19,9 @@ EPManager is currently in Public Preview, meaning that although the it is functi
 
 ## 🔄 Updates
 
-- **v0.5**
+- **v0.6**
+  - Added support for [Deny rules](https://learn.microsoft.com/en-us/intune/intune-service/fundamentals/whats-new#endpoint-privilege-management-rules-explicitly-deny-elevation)
+- v0.5
   - Improved function to use export report data for large environments
 - v0.4
   - Improved validation of imported rules
@@ -44,7 +46,7 @@ The PowerShell script requires the below Graph API permissions, you can create a
 Then you can authenticate using the below:
 
 ```powershell
-.\EPManager.ps1 -tenantID '437e8ffb-3030-469a-99da-e5b527908099' -appId '799ebcfa-ca81-4e63-baaf-a35123164d78' -appSecret 'g708Q~uot4xo9dU_1TjGQIuUr0UyBHNZmY2mdcy6' -report
+.\EPManager.ps1 -report -tenantID '437e8ffb-3030-469a-99da-e5b527908099' -appId '799ebcfa-ca81-4e63-baaf-a35123164d78' -appSecret 'g708Q~uot4xo9dU_1TjGQIuUr0UyBHNZmY2macy6'
 ```
 
 ## ⏯ Usage
