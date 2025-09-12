@@ -1,6 +1,6 @@
 <#PSScriptInfo
 
-.VERSION 0.6
+.VERSION 0.6.1
 .GUID dda70c3d-e3c9-44cb-9acf-6e452e36d9d5
 .AUTHOR Nick Benton
 .COMPANYNAME odds+endpoints
@@ -13,16 +13,17 @@
 .REQUIREDSCRIPTS
 .EXTERNALSCRIPTDEPENDENCIES
 .RELEASENOTES
-v0.1 - Initial release
-v0.2 - Updated logic
-v0.3 - Improved Functions and information.
-v0.3.1 - Resolved parameter issues
-v0.3.2 - Updated to allow for multiple rules of the same file
-v0.3.3 - Updated policy naming, introduced rule count limit, updated validation
-v0.4 - Improved validation of report data
+v0.6.1 - Bug fixes and improvements
+v0.6.0 - Updated to include Deny rules
+v0.5.0 - Updated functions to use Export Jobs instead of Graph Calls for elevation reports
 v0.4.1 - Parameter requirements
-v0.5 - Updated functions to use Export Jobs instead of Graph Calls for elevation reports
-v0.6 - Updated to include Deny rules
+v0.4.0 - Improved validation of report data
+v0.3.3 - Updated policy naming, introduced rule count limit, updated validation
+v0.3.2 - Updated to allow for multiple rules of the same file
+v0.3.1 - Resolved parameter issues
+v0.3.0 - Improved Functions and information
+v0.2.0 - Updated logic
+v0.1.0 - Initial release
 
 .PRIVATEDATA
 #>
@@ -32,15 +33,6 @@ EPManager - Export elevation data from Intune and import to create EPM Rule poli
 
 .DESCRIPTION
 Used to export elevation requests reporting to Intune to CSV, allowing to modify the CSV file to create EPM rule policies and assign based on provided groups.
-
-.PARAMETER tenantId
-Provide the Id of the tenant to connect to.
-
-.PARAMETER appId
-Provide the Id of the Entra App registration to be used for authentication.
-
-.PARAMETER appSecret
-Provide the App secret to allow for authentication to graph
 
 .PARAMETER report
 Generates and downloads EPM report details to a CSV file in the same folder as the script.
@@ -61,6 +53,15 @@ All, Unmanaged, Automatic, UserConfirmed, SupportApproved
 .PARAMETER whatIf
 Switch to enable WhatIf mode to simulate changes.
 
+.PARAMETER tenantId
+Provide the Id of the tenant to connect to.
+
+.PARAMETER appId
+Provide the Id of the Entra App registration to be used for authentication.
+
+.PARAMETER appSecret
+Provide the App secret to allow for authentication to graph
+
 .EXAMPLE
 PS> .\EPManager.ps1 -tenantId 36019fe7-a342-4d98-9126-1b6f94904ac7 -report
 
@@ -69,12 +70,6 @@ PS> .\EPManager.ps1 -tenantId 36019fe7-a342-4d98-9126-1b6f94904ac7 -import -impo
 
 .EXAMPLE
 PS> .\EPManager.ps1 -tenantId 36019fe7-a342-4d98-9126-1b6f94904ac7 -import -importPath "EPM-Report-20250321-105116.csv" -assign
-
-.NOTES
-Version:        0.5
-Author:         Nick Benton
-WWW:            oddsandendpoints.co.uk
-Creation Date:  11/06/2025
 
 #>
 
@@ -118,9 +113,9 @@ param(
 
 if ($report -and $import) {
     Write-Host ''
-    Write-Host "Please select only 'report' or 'import' when running the script." -ForegroundColor Yellow
+    Write-Host "Please select only 'report' or 'import' when running the script." -ForegroundColor Red
     Write-Host ''
-    break
+    Exit
 }
 
 #region Functions
@@ -527,19 +522,19 @@ Function Get-TenantDetail() {
 #region intro
 Write-Host '
  _______ ______ _______
-|    ___|   __ \   |   |.---.-.-----.---.-.-----.-----.----.
-|    ___|    __/       ||  _  |     |  _  |  _  |  -__|   _|
+|    ___|   __ \   |   |.---.-.-----.---.-.-----.-----.----.' -ForegroundColor DarkYellow -NoNewline
+Write-Host '
+|    ___|    __/       ||  _  |     |  _  |  _  |  -__|   _|' -ForegroundColor Red -NoNewline
+Write-Host '
 |_______|___|  |__|_|__||___._|__|__|___._|___  |_____|__|
                                           |_____|
-' -ForegroundColor Red
+' -ForegroundColor DarkRed
 
 Write-Host 'EPManager - Export elevation data from Intune and import to create EPM Rule policies.' -ForegroundColor Green
 Write-Host 'Nick Benton - oddsandendpoints.co.uk' -NoNewline;
-Write-Host ' | Version' -NoNewline; Write-Host ' 0.6 Public Preview' -ForegroundColor Yellow -NoNewline
-Write-Host ' | Last updated: ' -NoNewline; Write-Host '2025-06-11' -ForegroundColor Magenta
-Write-Host ''
-Write-Host 'If you have any feedback, please open an issue at https://github.com/ennnbeee/EndpointPrivilegeManager/issues' -ForegroundColor Cyan
-Write-Host ''
+Write-Host ' | Version' -NoNewline; Write-Host ' 0.6.1 Public Preview' -ForegroundColor Yellow -NoNewline
+Write-Host ' | Last updated: ' -NoNewline; Write-Host '2025-09-12' -ForegroundColor Magenta
+Write-Host "`nIf you have any feedback, please open an issue at https://github.com/ennnbeee/EPManager/issues" -ForegroundColor Cyan
 #endregion intro
 
 #region variables
@@ -556,12 +551,10 @@ $childProcessBehaviours = @('AllowAll', 'RequireRule', 'DenyAll', 'NotConfigured
 $modules = @('Microsoft.Graph.Authentication')
 foreach ($module in $modules) {
     Write-Host "Checking for $module PowerShell module..." -ForegroundColor Cyan
-    Write-Host ''
     If (!(Get-Module -Name $module -ListAvailable)) {
         Install-Module -Name $module -Scope CurrentUser -AllowClobber
     }
     Write-Host "PowerShell Module $module found." -ForegroundColor Green
-    Write-Host ''
     Import-Module -Name $module -Force
 }
 #endregion module check
@@ -584,7 +577,6 @@ try {
     }
     $context = Get-MgContext
     $tenantName = ((Get-TenantDetail).verifiedDomains | Where-Object { $_.isInitial -eq $true }).name
-    Write-Host ''
     Write-Host "Successfully connected to Microsoft Graph tenant $tenantName with ID $($context.TenantId)." -ForegroundColor Green
 }
 catch {
@@ -600,11 +592,9 @@ $missingScopes = $requiredScopes | Where-Object { $_ -notin $currentScopes }
 if ($missingScopes.Count -gt 0) {
     Write-Host 'WARNING: The following scope permissions are missing:' -ForegroundColor Red
     $missingScopes | ForEach-Object { Write-Host "  - $_" -ForegroundColor Yellow }
-    Write-Host ''
     Write-Host 'Please ensure these permissions are granted to the app registration for full functionality.' -ForegroundColor Yellow
     exit
 }
-Write-Host ''
 Write-Host 'All required scope permissions are present.' -ForegroundColor Green
 #endregion scopes
 
@@ -630,9 +620,7 @@ if ($report) {
     }
 
     Write-Host "EPM report for $elevationMode elevations completed processing." -ForegroundColor Green
-    Write-Host
-    Write-Host 'Getting EPM Report data...' -ForegroundColor Magenta
-    Write-Host
+    Write-Host "`nGetting EPM Report data..." -ForegroundColor Magenta
 
     $csvUrl = (Get-DeviceEPMReport -Id $elevationReport.id).url
     $csvHeader = @{Accept = '*/*'; 'accept-encoding' = 'gzip, deflate, br, zstd' }
@@ -641,20 +629,13 @@ if ($report) {
     $csvReportZip = [System.IO.Compression.ZipArchive]::new([System.IO.MemoryStream]::new($csvReportStream.Content))
     $csvReportElevations = [System.IO.StreamReader]::new($csvReportZip.GetEntry($csvReportZip.Entries[0]).open()).ReadToEnd() | ConvertFrom-Csv
 
-
-
     if ($csvReportElevations.count -eq 0) {
-        Write-Host ''
-        Write-Host "No elevations with mode $elevationMode found in Intune." -ForegroundColor Red
-        Write-Host ''
+        Write-Host "`nNo elevations with mode $elevationMode found in Intune." -ForegroundColor Red
         Break
     }
-    Write-Host ''
     Write-Host "Found $($csvReportElevations.count) $elevationMode elevation(s) in Intune." -ForegroundColor Cyan
-    Write-Host ''
 
     $groupedElevations = $csvReportElevations | Group-Object -Property $grouping
-
     foreach ($groupedElevation in $groupedElevations) {
 
         $elevationGroups = $groupedElevation.Group
@@ -696,11 +677,8 @@ if ($report) {
 
     # CSV Report
     $epmReport | Sort-Object ElevationCount -Descending | Export-Csv -Path $csvFile -NoTypeInformation
-    Write-Host ''
     Write-Host "EPM Activity report exported to $csvFile" -ForegroundColor Green
-    Write-Host ''
-    Write-Host "Before running the script with the '-import' switch, update the exported file with the rules to be created." -ForegroundColor Cyan
-    Write-Host ''
+    Write-Host "`nBefore running the script with the '-import' switch, update the exported file with the rules to be created." -ForegroundColor Cyan
 }
 #endregion Report
 
@@ -708,71 +686,59 @@ if ($report) {
 if ($import) {
 
     while (!(Test-Path "$importFile")) {
-        Write-Host ''
         Write-Host "Unable to find provided import file $importFile" -ForegroundColor yellow
-        Write-Host ''
         $importFile = Read-Host -Prompt 'Please specify a valid path to EPM data CSV to e.g., C:\Temp\EPM_Data.csv'
     }
     $importedPolicies = Import-Csv -Path $importFile | Group-Object -Property Group
 
     #region Validation
     Write-Host 'Beginning validation of the imported policies.' -ForegroundColor Cyan
-    Write-Host ''
     $validationCount = 0
 
     #elevation types
     if ($($importedPolicies.Group.ElevationType).Where{ $_ -notin $elevationTypes }) {
         Write-Host 'Rule policy elevation types are incorrect, please review.' -ForegroundColor Yellow
-        Write-Host ''
         $validationCount++
     }
     #child process behaviour
     if ($($importedPolicies.Group.ChildProcessBehaviour).Where{ $_ -notin $childProcessBehaviours }) {
         Write-Host 'Rule policy child process behaviours are incorrect, please review.' -ForegroundColor Yellow
-        Write-Host ''
         $validationCount++
     }
     #FileName invalid characters
     $fileNameIssues = $importedPolicies.Group.FileName -notmatch '^$|^[^<\/*?\"\"\\\\>:|]+\.[a-zA-Z0-9]{2,4}$'
     if ($fileNameIssues.Count -gt 0) {
         Write-Host 'Rule policy FileNames contain invalid characters or are incorrectly formatted, please review.' -ForegroundColor Yellow
-        Write-Host ''
         foreach ($fileNameIssue in $fileNameIssues) {
             Write-Host $fileNameIssue -ForegroundColor White
         }
-        Write-Host ''
         $validationCount++
     }
     #filePath invalid characters
     $filePathIssues = $importedPolicies.Group.filePath -notmatch '^$|(([a-zA-Z]:)(\\[ \w\\.()!#$%&''()+-.]*|[!#$%&''()+-.]|\\?|\\%[ \w\\.()]+%+)+|%[ \w\\.()]+%(\\[ \w\\.()]*|\\?|\\%[ \w\\.()]+%+)*)$'
     if ($filePathIssues.Count -gt 0) {
         Write-Host 'Rule policy filePaths contain invalid characters, please review.' -ForegroundColor Yellow
-        Write-Host ''
         foreach ($filePathIssue in $filePathIssues) {
             Write-Host $filePathIssue -ForegroundColor white
         }
-        Write-Host ''
         $validationCount++
     }
     #FileInternalName too short or long
     $fileInternNameIssues = ($importedPolicies.Group.FileInternalName | ForEach-Object { $_.Length })
     if ($fileInternNameIssues -lt 3) {
         Write-Host 'Rule policy FileInternalNames are shorter than 3 characters, please review.' -ForegroundColor Yellow
-        Write-Host ''
         $validationCount++
     }
     #fileDescription too short or long
     $descriptionIssues = ($importedPolicies.Group.Description | ForEach-Object { $_.Length })
     if ($descriptionIssues -lt 3) {
         Write-Host 'Rule policy Descriptions are shorter than 3 characters, please review.' -ForegroundColor Yellow
-        Write-Host ''
         $validationCount++
     }
     #fileDescription too short or long
     $productIssues = ($importedPolicies.Group.Product | ForEach-Object { $_.Length })
     if ($productIssues -lt 3) {
         Write-Host 'Rule policy Products are shorter than 3 characters, please review.' -ForegroundColor Yellow
-        Write-Host ''
         $validationCount++
     }
     #group issues
@@ -781,7 +747,6 @@ if ($import) {
         foreach ($assignmentGroup in $assignmentGroups) {
             if ($null -eq (Get-IntuneGroup -Name $assignmentGroup)) {
                 Write-Host "Rule policy group $assignmentGroup cannot be found in Entra ID, please review." -ForegroundColor Yellow
-                Write-Host ''
                 $validationCount++
             }
         }
@@ -789,15 +754,11 @@ if ($import) {
 
     if ($validationCount -gt 0) {
         Write-Host 'Review and remediate the reported issues with the import file.' -ForegroundColor Red
-        Write-Host ''
         Break
     }
     else {
         Write-Host 'Validation complete, creating EPM Rule Policies.' -ForegroundColor Green
-        Write-Host ''
     }
-
-
     #endregion Validation
 
     #region rule split
@@ -1434,7 +1395,6 @@ if ($import) {
         $JSONOutput = $JSONPolicyStart + $JSONRules + $JSONPolicyEnd
 
         if ($whatIf) {
-            Write-Host ''
             Write-Host 'WhatIf mode enabled, no changes will be made.' -ForegroundColor Magenta
             $JSONOutput > "$policyName.json"
             Write-Host "EPM Policy exported to $policyName.json" -ForegroundColor Cyan
@@ -1443,20 +1403,16 @@ if ($import) {
         else {
             if ($null -ne (Get-DeviceSettingsCatalog -EPM | Where-Object { $_.Name -eq $policyName })) {
                 Write-Host "EPM policy '$policyName' already exists in Intune." -ForegroundColor Cyan
-                Write-Host ''
             }
             else {
                 $EPMPolicy = New-DeviceSettingsCatalog -JSON $JSONOutput
                 Write-Host "EPM policy '$policyName' created in Intune." -ForegroundColor Green
-                Write-Host ''
             }
 
             if ($assign) {
                 $group = Get-IntuneGroup -Name $intunePolicy.Name
                 Add-DeviceSettingsCatalogAssignment -Id $EPMPolicy.id -groupId $group.id -assignmentType Include -name $EPMPolicy.name
-                Write-Host ''
                 Write-Host "Successfully assigned Elevation Rules Policy to $($group.displayname)" -ForegroundColor Green
-                Write-Host ''
             }
         }
     }

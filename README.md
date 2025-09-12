@@ -19,18 +19,20 @@ EPManager is currently in Public Preview, meaning that although the it is functi
 
 ## 🔄 Updates
 
-- **v0.6**
+- **v0.6.1**
+  - Bug fixes and script improvements
+- v0.6.0
   - Added support for [Deny rules](https://learn.microsoft.com/en-us/intune/intune-service/fundamentals/whats-new#endpoint-privilege-management-rules-explicitly-deny-elevation)
-- v0.5
+- v0.5.0
   - Improved function to use export report data for large environments
-- v0.4
+- v0.4.0
   - Improved validation of imported rules
   - Added a `whatIf` mode to allow for export of JSON data for review
-- v0.3
+- v0.3.0
   - Improved Functions and information.
-- v0.2
+- v0.2.0
   - Updated logic for hash grouping of exported rules
-- v0.1
+- v0.1.0
   - Initial release
 
 ## 🔑 Permissions
